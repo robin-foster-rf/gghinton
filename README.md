@@ -12,17 +12,21 @@ structure of the matrix easy.
 pak::pkg_install("robin-foster-rf/gghinton")
 # install.packages("gghinton")  # once on CRAN
 
+library(ggplot2)
 library(gghinton)
 
-m <- matrix(runif(10*10, -1, 1), nrow = 10)
+m <- matrix(rnorm(10*10), nrow = 10)
 
 matrix_to_hinton(m) |>
   ggplot(aes(x = col, y = row, weight = weight)) +
   geom_hinton() +
   scale_fill_hinton() +
   coord_fixed() +
-  theme_hinton()
+  theme_hinton() + 
+  theme(axis.text = element_blank())
 ```
+
+![](img/gghinton-rnorm-eg.png)
 
 ## Why not a heatmap?
 
