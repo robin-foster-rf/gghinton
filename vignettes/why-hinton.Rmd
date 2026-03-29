@@ -79,7 +79,6 @@ ggplot(df_h, aes(x = col, y = row, weight = weight)) +
   scale_fill_hinton() +
   scale_x_continuous(breaks = seq_along(colnames(W)), labels = colnames(W)) +
   scale_y_continuous(breaks = seq_along(rownames(W)), labels = rev(rownames(W))) +
-  scale_y_reverse() +
   coord_fixed() +
   theme_hinton() +
   theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))+

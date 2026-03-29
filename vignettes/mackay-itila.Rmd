@@ -84,12 +84,12 @@ ggplot(df_uni, aes(x = col, y = row, weight = weight)) +
   theme_mackay() +
   theme(axis.text.y = element_text(size = 8, family = "mono")) +
   labs(
-    title    = "Character unigram probabilities (MacKay ITILA Figure 2.1)",
-    subtitle = "Estimated from The Frequently Asked Questions Manual for Linux",
     x        = NULL,
     y        = NULL
   )
 ```
+
+![ITILA fig 2.1 original](../img/itila-fig2.1.png)
 
 ---
 
@@ -139,6 +139,7 @@ ggplot(df_bg, aes(x = col, y = row, weight = weight)) +
   )
 ```
 
+![ITILA fig 2.2 original](../img/itila-fig2.2.png)
 
 ```{r corpus-size}
 # Fraction of the 729 cells with at least one observed bigram
@@ -186,11 +187,14 @@ ggplot(df_cond, aes(x = col, y = row, weight = weight)) +
   facet_wrap(~ panel, ncol = 2) +
   theme_mackay() +
   labs(
-    title = "Recreating MacKay ITILA Figure 2.3",
-    x     = "y (second character)",
-    y     = "x (first character)"
+    title    = "English letter bigrams: conditional probability P(x|y) and P(y|x)",
+    subtitle = "Recreating MacKay ITILA Figure 2.3",
+    x        = "y (second character)",
+    y        = "x (first character)"
   )
 ```
+
+![ITILA fig 2.3 original](../img/itila-fig2.3.png)
 
 ---
 
@@ -201,10 +205,10 @@ MacKay introduces this joint distribution to illustrate Bayesian inference
 
 Setup: An urn contains $N = 10$ balls.  Fred draws $u$, the number of black
 balls, from a uniform prior $P(u) = 1/11$ for $u = 0, 1, \ldots, 10$.  Bill then
-draws $N = 10 balls$ *with replacement* and observes $n_B$ black balls.  The joint
+draws $N = 10$ balls with replacement and observes $n_B$ black balls.  The joint
 distribution is:
 
-$$P(u, n_B) = P(u) * P(n_B | u, N) = (1/11) * \mathrm{Binomial}(n_B; N = 10, p = u/10)$$
+$$P(u, n_B) = P(u) \cdot P(n_B | u, N) \cdot \mathrm{Binomial}(n_B; N = 10, p = u/10)$$
 
 ```{r urn-compute}
 N       <- 10L
@@ -244,3 +248,5 @@ The dominant diagonal reflects that $n_B$ is most probable near $u$, with the
 corners ($u$ = 0, $n_B$ = 0) and ($u$ = 10, $n_B$ = 10) being certain outcomes.  This
 structure is immediately legible in the Hinton diagram but would be hard to
 read in a table of 121 numbers.
+
+![ITILA fig 2.5 original](../img/itila-fig2.5.png)
