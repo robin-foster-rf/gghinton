@@ -5,6 +5,5 @@
 *.Rproj
 /doc/
 /Meta/
-/man/
 .claude/
 /vignettes/*.html
