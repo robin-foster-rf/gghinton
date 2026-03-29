@@ -1,0 +1,236 @@
+---
+title: "Getting Started with gghinton"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Getting Started with gghinton}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  fig.width  = 5,
+  fig.height = 5
+)
+```
+
+```{r setup}
+library(gghinton)
+library(ggplot2)
+```
+
+## What is a Hinton diagram?
+
+A Hinton diagram is a compact visualization of a numerical matrix.  Each cell
+is represented by a square whose **area is proportional to the magnitude** of
+the value, so larger values are immediately distinguishable from smaller ones,
+something that colour shading alone (as in a heatmap) does not achieve as
+directly.
+
+For **signed data**, the convention established by Geoffrey Hinton for
+visualizing neural network weights is:
+
+- **White square**: positive value
+- **Black square**: negative value
+- **Grey background**: zero reference
+
+For **non-negative data**, the grey background is omitted and all squares are
+drawn in black.
+
+## When to use a Hinton diagram
+
+A Hinton diagram excels when:
+
+- **Sign matters**: you want to see positive and negative structure at a
+  glance, without choosing a diverging colour palette and worrying about its
+  perceptual properties.
+- **Sparsity matters**: near-zero entries produce near-invisible squares,
+  revealing structure that colour intensity conceals in noisy data.
+- **Relative magnitude matters**: comparing the sizes of squares is more
+  accurate than comparing shades of colour, because area is a
+  pre-attentive visual channel that humans judge more reliably than hue
+  saturation.
+
+Typical use cases include neural network weight matrices, correlation matrices,
+factor loadings from PCA or factor analysis, and transition matrices from
+Markov models.
+
+## Quick start
+
+```{r quick-start}
+# A 10x10 signed matrix
+set.seed(99)
+m <- matrix(rnorm(100), nrow = 10)
+rownames(m) <- paste0("r", 1:10)
+colnames(m) <- paste0("c", 1:10)
+
+df <- matrix_to_hinton(m)
+
+ggplot(df, aes(x = col, y = row, weight = weight)) +
+  geom_hinton() +
+  scale_fill_hinton() +
+  coord_fixed() +
+  theme_hinton() +
+  labs(title = "A signed Hinton diagram")
+```
+
+The five-function recipe is the standard `gghinton` workflow:
+
+1. `matrix_to_hinton()`: reshape the matrix to a tidy data frame
+2. `geom_hinton()`: draw the squares
+3. `scale_fill_hinton()`: apply the conventional white/black colour scheme
+4. `coord_fixed()`: ensure squares appear as squares (not rectangles)
+5. `theme_hinton()`: remove grid lines that would compete visually with the
+   squares
+
+## Unsigned data
+
+When all values are non-negative, `geom_hinton()` detects this automatically
+and omits the grey background.
+
+```{r unsigned}
+m_pos <- abs(m)
+df_pos <- matrix_to_hinton(m_pos)
+
+ggplot(df_pos, aes(x = col, y = row, weight = weight)) +
+  geom_hinton() +
+  scale_fill_hinton() +
+  coord_fixed() +
+  theme_hinton() +
+  labs(title = "An unsigned Hinton diagram")
+```
+
+## Converting different data structures
+
+`as_hinton_df()` provides a generic interface that dispatches on the class of
+its input.
+
+```{r as-hinton-df}
+# matrix
+as_hinton_df(matrix(c(1, -2, 3, -4), 2, 2))
+
+# base R table
+t2 <- table(
+  group   = c("A", "A", "B", "B"),
+  outcome = c("yes", "no", "yes", "no")
+)
+as_hinton_df(t2)
+```
+
+If you already have a tidy data frame with the right column names, pass it
+directly:
+
+```{r as-hinton-df-df}
+tidy <- data.frame(row = c(1, 1, 2, 2), col = c(1, 2, 1, 2),
+                   weight = c(0.5, -0.3, 0.8, -0.1))
+as_hinton_df(tidy)
+```
+
+## The `scale_by` parameter
+
+By default, normalization is **per-panel**: the largest value in each facet
+fills its cell.  When you want to compare magnitudes *across* facets, use
+`scale_by = "global"` so that all panels share the same scale.
+
+```{r scale-by, fig.width = 8, fig.height = 4}
+set.seed(1)
+df_a <- cbind(matrix_to_hinton(matrix(runif(9, -1,  1), 3, 3)),
+              panel = "A (range +/-1)")
+df_b <- cbind(matrix_to_hinton(matrix(runif(9, -5,  5), 3, 3)),
+              panel = "B (range +/-5)")
+df_ab <- rbind(df_a, df_b)
+
+# Per-panel scaling: each panel's largest value fills its cell
+ggplot(df_ab, aes(x = col, y = row, weight = weight)) +
+  geom_hinton(scale_by = "panel") +
+  scale_fill_hinton() +
+  coord_fixed() +
+  theme_hinton() +
+  facet_wrap(~panel) +
+  labs(title = 'scale_by = "panel" (default)')
+
+# Global scaling: panel A appears much smaller
+ggplot(df_ab, aes(x = col, y = row, weight = weight)) +
+  geom_hinton(scale_by = "global") +
+  scale_fill_hinton() +
+  coord_fixed() +
+  theme_hinton() +
+  facet_wrap(~panel) +
+  labs(title = 'scale_by = "global"')
+```
+
+## Customization
+
+### Custom colours
+
+Pass a named `values` vector to `scale_fill_hinton()` to override individual
+colours while keeping the defaults for the rest:
+
+```{r custom-colours}
+df <- matrix_to_hinton(m)
+
+ggplot(df, aes(x = col, y = row, weight = weight)) +
+  geom_hinton(background = FALSE) +
+  scale_fill_hinton(values = c(positive = "darkblue", negative = "darkred")) +
+  coord_fixed() +
+  theme_hinton() +
+  labs(title = "Custom colours")
+```
+
+### Axis labels from matrix names
+
+When `matrix_to_hinton()` detects row or column names it adds `row_label` and
+`col_label` columns that you can use with `scale_*` breaks and labels.
+
+```{r axis-labels}
+# m has rownames/colnames set above
+df_named <- matrix_to_hinton(m)
+
+ggplot(df_named, aes(x = col, y = row, weight = weight)) +
+  geom_hinton() +
+  scale_fill_hinton() +
+  scale_x_continuous(
+    breaks = seq_len(ncol(m)),
+    labels = colnames(m)
+  ) +
+  scale_y_continuous(
+    breaks = seq_len(nrow(m)),
+    labels = rev(rownames(m))  # reversed because row 1 is at the top
+  ) +
+  coord_fixed() +
+  theme_hinton() +
+  labs(title = "Named axes")
+```
+
+### Removing the background
+
+Set `background = FALSE` to suppress the grey background even for signed data:
+
+```{r no-bg}
+ggplot(df, aes(x = col, y = row, weight = weight)) +
+  geom_hinton(background = FALSE) +
+  scale_fill_hinton(values = c(positive = "grey70")) +
+  coord_fixed() +
+  theme_hinton() +
+  labs(title = "Signed data without background")
+```
+
+## Correlation matrix example
+
+```{r mtcars-cor, fig.width = 6, fig.height = 6}
+df_cor <- as_hinton_df(cor(mtcars))
+vars <- colnames(mtcars)
+
+ggplot(df_cor, aes(x = col, y = row, weight = weight)) +
+  geom_hinton() +
+  scale_fill_hinton() +
+  scale_x_continuous(breaks = seq_along(vars), labels = vars) +
+  scale_y_continuous(breaks = seq_along(vars), labels = rev(vars)) +
+  coord_fixed() +
+  theme_hinton() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(title = "cor(mtcars)",
+       subtitle = "White = positive, black = negative correlation")
+```

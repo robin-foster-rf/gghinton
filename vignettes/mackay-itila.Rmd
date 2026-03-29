@@ -1,0 +1,246 @@
+---
+title: "MacKay's ITILA Examples"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{MacKay's ITILA Examples}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment  = "#>",
+  fig.width  = 6,
+  fig.height = 6
+)
+```
+
+```{r setup, message = FALSE}
+library(gghinton)
+library(ggplot2)
+```
+
+I first came across Hinton diagrams in David MacKay's excellent book _Information Theory, Inference, and Learning Algorithms_ ([ITILA](https://www.inference.org.uk/mackay/itila/book.html), Cambridge University Press, 2003). 
+Here we recreate some examples from Chapter 2, visualising discrete probability distributions over characters and character pairs in English text.
+
+
+## The MacKay colour scheme
+
+MacKay's convention in this chapter is the inverse of the default
+`gghinton` style: white squares on a black background, with square area
+proportional to probability. It's simple enough to change this by updating the theme.
+
+MacKay's figures use unsigned data (all probabilities are non-negative), so
+`scale_fill_hinton(values = c(unsigned = "white"))` combined with a black panel
+background reproduces his style:
+
+```{r theme-mackay}
+theme_mackay <- function() {
+  theme_hinton() +
+    theme(
+      panel.background = element_rect(fill = "black", colour = NA),
+      panel.border = element_rect(colour = "grey30", fill = NA,
+                                  linewidth = 0.4), 
+      axis.text = element_text(size = 12, family = "mono")
+    )
+}
+```
+
+---
+
+## Figure 2.1: discrete unigram probabilities
+
+MacKay's Figure 2.1 gives the unigram probabilities (estimated from the
+Linux FAQ), which can be reproduced directly:
+
+```{r unigram}
+chars27     <- c(letters, " ")
+axis_labels <- c(letters, "_")
+
+# Probabilities from MacKay ITILA Table / Figure 2.1
+p_char <- c(
+  a = 0.0575, b = 0.0128, c = 0.0263, d = 0.0285, e = 0.0913,
+  f = 0.0173, g = 0.0133, h = 0.0313, i = 0.0599, j = 0.0006,
+  k = 0.0084, l = 0.0335, m = 0.0235, n = 0.0596, o = 0.0689,
+  p = 0.0192, q = 0.0008, r = 0.0508, s = 0.0567, t = 0.0706,
+  u = 0.0334, v = 0.0069, w = 0.0119, x = 0.0073, y = 0.0164,
+  z = 0.0007, ` ` = 0.1928
+)
+
+# Display as a single-column Hinton diagram (1x27 matrix, one column)
+unigram_mat <- matrix(p_char, nrow = length(p_char), ncol = 1,
+                      dimnames = list(chars27, "p"))
+df_uni <- matrix_to_hinton(unigram_mat)
+
+ggplot(df_uni, aes(x = col, y = row, weight = weight)) +
+  geom_hinton() +
+  scale_fill_hinton(values = c(unsigned = "white")) +
+  scale_y_continuous(breaks = seq_along(chars27),
+                     labels = rev(axis_labels),
+                     expand = c(0.02, 0.02)) +
+  scale_x_continuous(breaks = NULL) +
+  coord_fixed() +
+  theme_mackay() +
+  theme(axis.text.y = element_text(size = 8, family = "mono")) +
+  labs(
+    title    = "Character unigram probabilities (MacKay ITILA Figure 2.1)",
+    subtitle = "Estimated from The Frequently Asked Questions Manual for Linux",
+    x        = NULL,
+    y        = NULL
+  )
+```
+
+---
+
+## Figure 2.2: English letter bigrams
+
+MacKay's Figure 2.2 shows the joint probability distribution $P(x, y)$ over the
+27 x 27 = 729 possible bigrams (letter pairs) in an English text -- the 26
+letters plus space (shown as `_`).  The source in the book is _The Frequently
+Asked Questions Manual for Linux_; we use the full text of
+*Alice's Adventures in Wonderland* (Lewis Carroll, 1865; Project Gutenberg
+item 11, public domain) instead, shipped as the `alice_bigrams` dataset in this package.
+
+```{r bigram-compute}
+# alice_bigrams[x, y] = count of character x immediately followed by y
+bg_prob <- alice_bigrams / sum(alice_bigrams)
+
+# Axis labels: a-z then "-" for space (MacKay's convention)
+chars27     <- c(letters, " ")
+axis_labels <- c(letters, "_")
+
+df_bg <- matrix_to_hinton(bg_prob)
+```
+
+```{r bigram-plot, fig.width = 7.5, fig.height = 7.5}
+ggplot(df_bg, aes(x = col, y = row, weight = weight)) +
+  geom_hinton() +
+  scale_fill_hinton(values = c(unsigned = "white")) +
+  # x: column 1 = 'a', column 27 = '-' (space)
+  scale_x_continuous(
+    breaks = seq_along(chars27),
+    labels = axis_labels,
+    expand = c(0.02, 0.02)
+  ) +
+  # y: row 1 (matrix row 'a') maps to highest y; labels reversed so 'a' is at top
+  scale_y_continuous(
+    breaks = seq_along(chars27),
+    labels = rev(axis_labels),
+    expand = c(0.02, 0.02)
+  ) +
+  coord_fixed() +
+  theme_mackay() +
+  labs(
+    title    = "English letter bigrams: joint probability P(x, y)",
+    subtitle = "Recreating MacKay ITILA Figure 2.2 (source: Alice in Wonderland)",
+    x        = "y (second character)",
+    y        = "x (first character)"
+  )
+```
+
+
+```{r corpus-size}
+# Fraction of the 729 cells with at least one observed bigram
+mean(alice_bigrams > 0)
+# Total bigrams observed
+sum(alice_bigrams)
+```
+
+---
+
+## Figure 2.3: Conditional probability distributions
+
+Normalising each row of the joint bigram matrix by its row sum gives
+P(y|x) -- the distribution over second characters given the first.
+Normalising each column by its column sum gives P(x|y) -- the distribution
+over first characters given the second. MacKay's Figure 2.3 displays both
+as Hinton diagrams side by side.
+
+```{r cond-compute}
+# P(y|x): row-normalise -- each row sums to 1
+row_sums <- rowSums(alice_bigrams)
+cond_yx  <- alice_bigrams / row_sums          # M[x, y] = P(y | first = x)
+
+# P(x|y): column-normalise -- each column sums to 1
+col_sums <- colSums(alice_bigrams)
+cond_xy  <- sweep(alice_bigrams, 2, col_sums, "/")  # M[x, y] = P(x | second = y)
+
+# Combine into one data frame for faceting
+df_yx <- matrix_to_hinton(cond_yx)
+df_xy <- matrix_to_hinton(cond_xy)
+df_yx$panel <- "(a) P(y | x)"
+df_xy$panel <- "(b) P(x | y)"
+df_cond <- rbind(df_yx, df_xy)
+```
+
+```{r cond-plot, fig.width = 15, fig.height = 7.5}
+ggplot(df_cond, aes(x = col, y = row, weight = weight)) +
+  geom_hinton() +
+  scale_fill_hinton(values = c(unsigned = "white")) +
+  scale_x_continuous(breaks = seq_along(chars27), labels = axis_labels,
+                     expand = c(0.02, 0.02)) +
+  scale_y_continuous(breaks = seq_along(chars27), labels = rev(axis_labels),
+                     expand = c(0.02, 0.02)) +
+  coord_fixed() +
+  facet_wrap(~ panel, ncol = 2) +
+  theme_mackay() +
+  labs(
+    title = "Recreating MacKay ITILA Figure 2.3",
+    x     = "y (second character)",
+    y     = "x (first character)"
+  )
+```
+
+---
+
+## Figure 2.5: Bill and Fred's urn problem
+
+MacKay introduces this joint distribution to illustrate Bayesian inference
+(ITILA Exercise 2.3).
+
+Setup: An urn contains $N = 10$ balls.  Fred draws $u$, the number of black
+balls, from a uniform prior $P(u) = 1/11$ for $u = 0, 1, \ldots, 10$.  Bill then
+draws $N = 10 balls$ *with replacement* and observes $n_B$ black balls.  The joint
+distribution is:
+
+$$P(u, n_B) = P(u) * P(n_B | u, N) = (1/11) * \mathrm{Binomial}(n_B; N = 10, p = u/10)$$
+
+```{r urn-compute}
+N       <- 10L
+u_vals  <- 0:N   # number of black balls in the urn (Fred's choice)
+nB_vals <- 0:N   # number of black balls observed in N draws (Bill's data)
+
+# Rows = u (0..10), columns = n_B (0..10)
+joint_mat <- outer(u_vals, nB_vals, function(u, nB) {
+  (1 / (N + 1)) * dbinom(nB, size = N, prob = u / N)
+})
+rownames(joint_mat) <- u_vals
+colnames(joint_mat) <- nB_vals
+
+df_urn <- matrix_to_hinton(joint_mat)
+```
+
+```{r urn-plot, fig.width = 6, fig.height = 6}
+ggplot(df_urn, aes(x = col, y = row, weight = weight)) +
+  geom_hinton() +
+  scale_fill_hinton(values = c(unsigned = "white")) +
+  # row 1 of the matrix (u = 0) maps to the highest y, so labels are reversed
+  scale_x_continuous(breaks = 1:(N + 1L), labels = nB_vals,
+                     expand = c(0.04, 0.04)) +
+  scale_y_continuous(breaks = 1:(N + 1L), labels = rev(u_vals),
+                     expand = c(0.04, 0.04)) +
+  coord_fixed() +
+  theme_mackay() +
+  labs(
+    title    = "Joint probability P(u, n_B | N = 10)",
+    subtitle = "Recreating MacKay ITILA Figure 2.5",
+    x        = expression(n[B]~~"(observed black balls)"),
+    y        = expression(u~~"(black balls in urn)")
+  )
+```
+
+The dominant diagonal reflects that $n_B$ is most probable near $u$, with the
+corners ($u$ = 0, $n_B$ = 0) and ($u$ = 10, $n_B$ = 10) being certain outcomes.  This
+structure is immediately legible in the Hinton diagram but would be hard to
+read in a table of 121 numbers.

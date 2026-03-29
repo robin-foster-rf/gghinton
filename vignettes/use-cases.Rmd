@@ -1,0 +1,363 @@
+---
+title: "Hinton Diagrams in Practice: A Gallery"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Hinton Diagrams in Practice: A Gallery}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment  = "#>",
+  fig.width  = 6,
+  fig.height = 6
+)
+```
+
+```{r setup, message = FALSE}
+library(gghinton)
+library(ggplot2)
+```
+
+Hinton diagrams work for any 2D numerical matrix where relative magnitude
+matters: signed or unsigned, sparse or dense.  This vignette shows a range of
+real use cases across statistics, machine learning, biology, and finance.
+
+---
+
+## 1. Correlation matrix
+
+The classic application.  `cor(mtcars)` gives an 11x11 signed matrix where
+positive correlations appear as white squares and negative as black.  The size
+immediately flags the dominant relationships without any colour-scale
+calibration.
+
+```{r correlation}
+df_cor <- as_hinton_df(cor(mtcars))
+vars <- colnames(mtcars)
+
+ggplot(df_cor, aes(x = col, y = row, weight = weight)) +
+  geom_hinton() +
+  scale_fill_hinton() +
+  scale_x_continuous(breaks = seq_along(vars), labels = vars) +
+  scale_y_continuous(breaks = seq_along(vars), labels = rev(vars)) +
+  coord_fixed() +
+  theme_hinton() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(
+    title    = "Correlation matrix: mtcars",
+    subtitle = "White = positive, black = negative"
+  )
+```
+
+Compare this to a heatmap of the same data: the Hinton version makes it
+immediately obvious which correlations are large (e.g., `cyl`-`disp`,
+`wt`-`disp`) and which are near-zero, without having to interpret a
+colour gradient.
+
+---
+
+## 2. PCA loadings
+
+The rotation matrix from principal component analysis is signed: a variable
+loads positively on a component if it increases in the direction of that
+component, negatively if it opposes it.  The Hinton diagram shows at a glance
+which variables dominate each component and in what direction.
+
+```{r pca-loadings}
+pca <- prcomp(scale(mtcars))
+# First four principal components
+loadings <- pca$rotation[, 1:4]
+colnames(loadings) <- paste0("PC", 1:4)
+
+df_pca <- matrix_to_hinton(loadings)
+
+ggplot(df_pca, aes(x = col, y = row, weight = weight)) +
+  geom_hinton() +
+  scale_fill_hinton() +
+  scale_x_continuous(breaks = 1:4, labels = colnames(loadings)) +
+  scale_y_continuous(breaks = seq_along(rownames(loadings)),
+                     labels = rev(rownames(loadings))) +
+  coord_fixed() +
+  theme_hinton() +
+  labs(
+    title    = "PCA loadings: mtcars",
+    subtitle = "Each column is a principal component"
+  )
+```
+
+PC1 (the largest component) shows large white squares for the performance
+variables (`cyl`, `disp`, `hp`, `wt`) and a large black square for `mpg`
+(the size/power vs efficiency axis).  PC2 and beyond reveal finer
+structure.
+
+---
+
+## 3. Confusion matrix
+
+A confusion matrix records how often a classifier assigns class *i* to class
+*j*.  For a well-performing classifier, the diagonal dominates; errors appear
+as smaller off-diagonal squares.  Hinton diagrams make systematic confusions
+(e.g., class A is often mistaken for class B) instantly visible.
+
+```{r confusion}
+# Realistic confusion matrix for a 5-class classifier
+# (e.g., handwritten digit recognition on a held-out test set)
+classes <- c("0", "1", "2", "3", "4")
+conf <- matrix(c(
+  96,  0,  1,  2,  1,
+   0, 98,  1,  0,  1,
+   2,  1, 88,  5,  4,
+   1,  0,  4, 91,  4,
+   1,  2,  4,  2, 91
+), nrow = 5, byrow = TRUE,
+dimnames = list(actual = classes, predicted = classes))
+
+# Row-normalise so each row shows the conditional error distribution
+conf_prop <- prop.table(conf, margin = 1)
+
+df_conf <- as_hinton_df(conf_prop)
+
+ggplot(df_conf, aes(x = col, y = row, weight = weight)) +
+  geom_hinton() +
+  scale_fill_hinton() +
+  scale_x_continuous(breaks = 1:5, labels = classes) +
+  scale_y_continuous(breaks = 1:5, labels = rev(classes)) +
+  coord_fixed() +
+  theme_hinton() +
+  labs(
+    title    = "Classifier confusion matrix (row-normalised)",
+    subtitle = "Diagonal = correct; off-diagonal = errors",
+    x = "Predicted", y = "Actual"
+  )
+```
+
+The dominant diagonal shows mostly correct predictions.  The visible
+off-diagonal squares for classes "2" and "3" reveal that these are most often
+confused with each other, useful feedback for improving the model.
+
+---
+
+## 4. Social mobility: occupational status transitions
+
+`datasets::occupationalStatus` records the joint distribution of fathers' and
+sons' occupational prestige in the United Kingdom (Hope 1982; 8 prestige
+categories, 1 = highest).  Row-normalising gives the empirical probability that
+a son reaches status *j* given his father was in status *i*.
+
+```{r social-mobility, fig.width = 6.5, fig.height = 6.5}
+trans <- prop.table(occupationalStatus, margin = 1)
+df_mob <- as_hinton_df(trans)
+
+ggplot(df_mob, aes(x = col, y = row, weight = weight)) +
+  geom_hinton() +
+  scale_fill_hinton() +
+  scale_x_continuous(breaks = 1:8,
+                     labels = colnames(occupationalStatus)) +
+  scale_y_continuous(breaks = 1:8,
+                     labels = rev(rownames(occupationalStatus))) +
+  coord_fixed() +
+  theme_hinton() +
+  labs(
+    title    = "Occupational mobility: UK (Hope 1982)",
+    subtitle = "Row-normalised; large square = likely transition",
+    x = "Son's status", y = "Father's status"
+  )
+```
+
+The dominant diagonal confirms occupational inheritance.  The asymmetry
+between upward and downward mobility is visible: squares above the diagonal
+(upward mobility) are generally comparable in size to those below (downward),
+suggesting roughly symmetric short-range mobility but with persistence at the
+extremes.
+
+---
+
+## 5. Credit rating transitions
+
+Credit rating agencies publish annual studies of how often issuers move between
+rating categories over a one-year horizon.  The matrix below uses approximate
+values representative of S&P Global's published long-run averages.  The
+structure is highly diagonal (most issuers retain their rating) with
+probability of default increasing sharply for lower-rated issuers.
+
+```{r credit-ratings, fig.width = 7, fig.height = 7}
+ratings <- c("AAA", "AA", "A", "BBB", "BB", "B", "CCC", "D")
+
+# Approximate one-year transition probabilities (illustrative;
+# based on S&P Global published default studies).
+# Rows sum to 1.
+sp_mat <- matrix(c(
+  # AAA      AA       A     BBB      BB       B     CCC       D
+  0.9181,  0.0748,  0.0050,  0.0006,  0.0008,  0.0000,  0.0000,  0.0007,
+  0.0057,  0.9109,  0.0762,  0.0054,  0.0010,  0.0006,  0.0002,  0.0000,
+  0.0009,  0.0226,  0.9115,  0.0560,  0.0064,  0.0020,  0.0004,  0.0002,
+  0.0002,  0.0027,  0.0507,  0.8685,  0.0588,  0.0129,  0.0024,  0.0038,
+  0.0003,  0.0010,  0.0067,  0.0778,  0.7749,  0.1106,  0.0101,  0.0186,
+  0.0000,  0.0006,  0.0025,  0.0104,  0.0720,  0.7653,  0.0613,  0.0879,
+  0.0000,  0.0000,  0.0023,  0.0090,  0.0194,  0.1326,  0.4493,  0.3874,
+  0.0000,  0.0000,  0.0000,  0.0000,  0.0000,  0.0000,  0.0000,  1.0000
+), nrow = 8, byrow = TRUE,
+dimnames = list(from = ratings, to = ratings))
+
+df_sp <- as_hinton_df(sp_mat)
+
+ggplot(df_sp, aes(x = col, y = row, weight = weight)) +
+  geom_hinton() +
+  scale_fill_hinton() +
+  scale_x_continuous(breaks = 1:8, labels = ratings) +
+  scale_y_continuous(breaks = 1:8, labels = rev(ratings)) +
+  coord_fixed() +
+  theme_hinton() +
+  labs(
+    title    = "Credit rating one-year transition probabilities",
+    subtitle = "Approximate values based on S&P Global published studies",
+    x = "To rating", y = "From rating"
+  )
+```
+
+The shrinking diagonal squares from AAA towards CCC show increasing
+instability at lower ratings.  The large square at D->D (bottom right)
+reflects that default is effectively an absorbing state in the short run.
+The Hinton diagram makes this structural feature (near-certain retention near
+the top, near-certain default absorption at the bottom) visible at a glance.
+
+---
+
+## 6. Nucleotide substitution rates
+
+In molecular evolution, the rate matrix **Q** describes the instantaneous rates
+at which DNA bases substitute for one another.  Under the Kimura (1980)
+two-parameter model, transitions (purine<->purine: A<->G; pyrimidine<->pyrimidine:
+C<->T) occur at rate kappa relative to transversions (purine<->pyrimidine).
+
+The rate matrix has a negative diagonal (rate of *leaving* that base) and
+positive off-diagonal entries.  With kappa = 4 (transitions four times more
+frequent than transversions) the structure is immediately visible as a Hinton
+diagram: two large white squares per row (transitions) and two small white
+squares (transversions), with the large black diagonal showing the net
+departure rate.
+
+```{r nucleotide-sub}
+# Kimura 2-parameter rate matrix, kappa = 4
+# Rows: source base; Columns: destination base
+# Diagonal is negative (departure rate); off-diagonal positive (arrival rate)
+kappa <- 4
+# Under K80: transversion rate beta, transition rate alpha = kappa * beta
+# With overall rate normalised: beta = 1/(2+2*kappa)
+beta  <- 1 / (2 + 2 * kappa)
+alpha <- kappa * beta
+
+bases <- c("A", "C", "G", "T")
+Q <- matrix(c(
+  -(alpha + 2*beta),  beta,               alpha,              beta,
+   beta,             -(alpha + 2*beta),   beta,               alpha,
+   alpha,             beta,              -(alpha + 2*beta),   beta,
+   beta,              alpha,              beta,              -(alpha + 2*beta)
+), nrow = 4, byrow = TRUE,
+dimnames = list(from = bases, to = bases))
+
+df_Q <- matrix_to_hinton(Q)
+
+ggplot(df_Q, aes(x = col, y = row, weight = weight)) +
+  geom_hinton() +
+  scale_fill_hinton() +
+  scale_x_continuous(breaks = 1:4, labels = bases) +
+  scale_y_continuous(breaks = 1:4, labels = rev(bases)) +
+  coord_fixed() +
+  theme_hinton() +
+  labs(
+    title    = paste0("Kimura K80 substitution rate matrix (kappa = ", kappa, ")"),
+    subtitle = "White = positive rate; black = negative diagonal (departure rate)",
+    x = "To", y = "From"
+  )
+```
+
+The white squares for A<->G and C<->T transitions are four times larger than the
+transversion squares, exactly kappa = 4.  The black diagonal squares show the total
+departure rate for each base.  This relationship, invisible in a table of
+numbers, is obvious at a glance in the Hinton diagram.
+
+---
+
+## 7. Regression coefficient matrix
+
+When fitting the same regression model across multiple outcomes (or multiple
+groups), the coefficient matrix (outcomes as rows, predictors as columns) can
+be viewed as a Hinton diagram.  Signed coefficients show direction of effect;
+size shows relative importance.
+
+```{r regression-coefs}
+# Three simple regressions: mpg, hp, and wt each predicted by
+# a common set of standardised predictors from mtcars
+outcomes  <- c("mpg", "hp", "wt")
+predictors <- c("cyl", "disp", "drat", "qsec", "gear", "carb")
+
+# Fit and collect standardised coefficients (excluding intercept)
+coef_mat <- sapply(outcomes, function(y) {
+  fit <- lm(reformulate(predictors, response = y),
+            data = as.data.frame(scale(mtcars)))
+  coef(fit)[predictors]
+})
+# coef_mat is predictors x outcomes; transpose to outcomes x predictors
+coef_mat <- t(coef_mat)
+
+df_coef <- matrix_to_hinton(coef_mat)
+
+ggplot(df_coef, aes(x = col, y = row, weight = weight)) +
+  geom_hinton() +
+  scale_fill_hinton() +
+  scale_x_continuous(breaks = seq_along(predictors), labels = predictors) +
+  scale_y_continuous(breaks = seq_along(outcomes),
+                     labels = rev(outcomes)) +
+  coord_fixed() +
+  theme_hinton() +
+  labs(
+    title    = "Standardised regression coefficients",
+    subtitle = "Each row is a separate outcome; white = positive effect",
+    x = "Predictor", y = "Outcome"
+  )
+```
+
+Variables with opposite effects on fuel economy versus engine power appear as
+contrasting colours in the same column, a feature that would require careful
+colour-scale alignment to communicate with a heatmap.
+
+---
+
+## 8. Cross-tabulation: hair and eye colour
+
+`datasets::HairEyeColor` is a 3D table (hair x eye x sex).  Collapsing over
+sex gives a 2D contingency table of hair-eye colour combinations.  Hinton
+diagrams of contingency tables show which combinations are over- or
+under-represented, though for simple counts the unsigned mode applies (all
+squares are black).
+
+```{r hair-eye}
+# Collapse over sex dimension
+hair_eye <- margin.table(HairEyeColor, margin = c(1, 2))
+
+# Row-normalise: probability of each eye colour given hair colour
+hair_eye_prop <- prop.table(hair_eye, margin = 1)
+
+df_he <- as_hinton_df(hair_eye_prop)
+
+ggplot(df_he, aes(x = col, y = row, weight = weight)) +
+  geom_hinton() +
+  scale_fill_hinton() +
+  scale_x_continuous(breaks = 1:4, labels = colnames(hair_eye)) +
+  scale_y_continuous(breaks = 1:4, labels = rev(rownames(hair_eye))) +
+  coord_fixed() +
+  theme_hinton() +
+  labs(
+    title    = "Eye colour given hair colour (HairEyeColor)",
+    subtitle = "Row-normalised; larger square = more probable combination",
+    x = "Eye colour", y = "Hair colour"
+  )
+```
+
+The dominant squares (brown eyes with brown hair, blue eyes with blond hair)
+stand out immediately.  The rarity of blue eyes with black hair is near-
+invisible, exactly as it should be.

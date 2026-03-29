@@ -1,0 +1,166 @@
+---
+title: "Why Hinton Diagrams?"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Why Hinton Diagrams?}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  fig.width  = 5,
+  fig.height = 5
+)
+```
+
+```{r setup, message = FALSE}
+library(gghinton)
+library(ggplot2)
+```
+
+Hinton diagrams were introduced by Geoffrey Hinton, one of the founders of
+deep learning, as a practical debugging tool for neural network weights in the
+1980s. The diagram appeared in textbooks on neural networks and connectionist
+models and became a standard visualization in that literature. Despite their
+long history, they remain underused in modern data analysis toolkits, in part
+because no convenient, ggplot2-native implementation existed.
+
+`gghinton` aims to fix that.
+
+## The problem with heatmaps for signed data
+
+Suppose you are training a neural network and you want to inspect a weight
+matrix: to understand which connections are large, which are small, and
+which are inhibitory versus excitatory.  The standard tool is a heatmap:
+
+```{r heatmap-example}
+set.seed(7)
+nr <- 10
+nc <- 18
+W <- matrix(rnorm(nr*nc, sd = 0.4), nrow = nr, ncol = nc)
+rownames(W) <- paste0("neuron_", 1:nr)
+colnames(W) <- paste0("input_",  1:nc)
+
+# The standard heatmap approach
+df <- as.data.frame(as.table(W))
+names(df) <- c("row", "col", "value")
+
+ggplot(df, aes(x = col, y = row, fill = value)) +
+  geom_tile() +
+  scale_fill_gradient2(low = "blue", mid = "white", high = "red",
+                       midpoint = 0) +
+  coord_fixed() +
+  theme_minimal() +
+  theme(panel.grid = element_blank(), 
+        axis.text.x = element_text(angle = 45, vjust = 1, hjust=1)) +
+  labs(title = "Weight matrix as a heatmap")
+```
+
+This works, but it has weaknesses:
+
+1. **Colour choice matters a lot.** Blue/white/red is readable; many diverging
+   palettes are not (especially for colourblind readers).
+2. **Small differences are hard to judge.** Is `0.35` more than twice `0.16`?
+   With colour, you can't easily tell.
+3. **Near-zero entries look similar** to each other and to slightly
+   positive/negative entries.
+
+Now the same data as a Hinton diagram:
+
+```{r hinton-example}
+df_h <- matrix_to_hinton(W,
+  rowname_col = "row", colname_col = "col", value_col = "weight")
+
+ggplot(df_h, aes(x = col, y = row, weight = weight)) +
+  geom_hinton() +
+  scale_fill_hinton() +
+  scale_x_continuous(breaks = seq_along(colnames(W)), labels = colnames(W)) +
+  scale_y_continuous(breaks = seq_along(rownames(W)), labels = rev(rownames(W))) +
+  scale_y_reverse() +
+  coord_fixed() +
+  theme_hinton() +
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))+
+  labs(title = "Weight matrix as a Hinton diagram")
+```
+
+The key differences:
+
+- **Dominant weights are immediately visible**: large squares catch the eye.
+- **Near-zero weights are nearly invisible**: the background shows through.
+- **Sign is black-and-white**: no colour palette decisions, no colourblind
+  concerns.
+- **Magnitude comparisons are accurate**: area comparisons are
+  pre-attentive and well-calibrated in human vision.
+
+## Why area beats colour for magnitude
+
+A large body of research in visual perception (Mackinlay 1986; Cleveland &
+McGill 1984) ranks visual encoding channels by how accurately humans can
+decode quantitative information.  The consensus ranking for magnitude:
+
+1. Position on a common scale (best)
+2. Length
+3. **Area**
+4. Angle / slope
+5. Colour saturation (worst for quantitative comparison)
+
+Heatmaps use **colour saturation** (the worst channel for magnitude).  Hinton
+diagrams use **area** (a dramatically better channel).  The improvement is most
+pronounced when:
+
+- Values span a wide range (e.g., `0.01` to `0.99`): tiny vs large squares
+  are unmistakable; pale vs saturated blue is not.
+- You need to compare non-adjacent entries: spatial position makes area
+  comparisons easy across the matrix.
+
+## The signed data advantage
+
+For correlation matrices or weight matrices where sign matters, Hinton
+diagrams have an additional advantage.  A heat map must choose a diverging
+colour scheme, map its midpoint correctly to zero, and hope that readers
+can distinguish near-zero from slightly-positive from slightly-negative.
+
+A Hinton diagram encodes sign with the most basic visual distinction
+possible: **black vs white**.  There is no perceptual ambiguity.
+
+```{r correlation-example}
+set.seed(3)
+# Simulate a correlation matrix
+S <- matrix(c(
+   1.00,  0.72, -0.35,  0.15,
+   0.72,  1.00, -0.21,  0.08,
+  -0.35, -0.21,  1.00, -0.58,
+   0.15,  0.08, -0.58,  1.00
+), 4, 4)
+vars <- c("IQ", "Memory", "Anxiety", "Stress")
+rownames(S) <- colnames(S) <- vars
+
+df_cor <- matrix_to_hinton(S)
+
+ggplot(df_cor, aes(x = col, y = row, weight = weight)) +
+  geom_hinton() +
+  scale_fill_hinton() +
+  scale_x_continuous(breaks = 1:4, labels = vars) +
+  scale_y_continuous(breaks = 1:4, labels = rev(vars)) +
+  coord_fixed() +
+  theme_hinton() +
+  labs(title = "Correlation matrix",
+       subtitle = "White = positive, black = negative")
+```
+
+Notice how the `Anxiety-Stress` negative correlation is immediately visible as
+a large black square, while the small positive `IQ-Stress` correlation
+is nearly absent.
+
+## When other visualisations are better
+
+Hinton diagrams are not universally superior. Other visualisations may be better when:
+
+- **The matrix is large** (say, > 50x50). Hinton squares become tiny and the
+  visual advantage becomes less clear.
+- **You need to communicate exact values**: Hinton diagrams prioritize relative visual impression. Other representations with numeric labels may be a better choice if precision is important.
+- **Continuous gradients** matter more than individual entries (e.g., a
+  spatial field like temperature over a map).

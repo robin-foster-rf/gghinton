@@ -1,0 +1,11 @@
+^PLAN\.md$
+^SKILL\.md$
+^NEXT\.md$
+^\.Rbuildignore$
+^\.gitignore$
+^\.gitattributes$
+^\.claude$
+^LICENSE\.md$
+^tools$
+^img
+^data-raw
