@@ -3,7 +3,7 @@
 **Hinton diagrams for ggplot2.**
 
 A Hinton diagram visualises a numerical matrix. Each element is displayed as a 
-square and where the square's area is proportional to the absolute value of the 
+square where the square's area is proportional to the absolute value of the 
 element. Positive values are white, negative values are black, on a grey 
 background. This simple clear perceptual mapping makes interpretation of the 
 structure of the matrix easy. 
