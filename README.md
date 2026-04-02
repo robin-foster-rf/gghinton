@@ -9,8 +9,7 @@ background. This simple clear perceptual mapping makes interpretation of the
 structure of the matrix easy. 
 
 ```r
-pak::pkg_install("robin-foster-rf/gghinton")
-# install.packages("gghinton")  # once on CRAN
+install.packages("hinton")
 
 library(ggplot2)
 library(gghinton)
@@ -50,10 +49,9 @@ the magnitude range is narrow.
 ## Installation
 
 ```r
-#development version:
-pak::pkg_install("robin-foster-rf/gghinton")
+install.packages("gghinton")  # from CRAN
 
-# install.packages("gghinton")  # from CRAN (once available)
+pak::pkg_install("robin-foster-rf/gghinton") # development version from github
 ```
 
 ## Core functions
